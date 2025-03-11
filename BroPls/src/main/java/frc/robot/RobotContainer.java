@@ -22,6 +22,8 @@ import frc.robot.Constants.OperatorConstants;
 import frc.robot.subsystems.SwerveSubsystem;
 import java.io.File;
 import swervelib.SwerveInputStream;
+import frc.robot.subsystems.PivotSubsystem;
+import edu.wpi.first.wpilibj2.command.Commands;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a "declarative" paradigm, very
@@ -33,6 +35,9 @@ public class RobotContainer
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
   final         CommandXboxController driverXbox = new CommandXboxController(0);
+
+  private final PivotSubsystem pivotSubsystem = new PivotSubsystem();
+
   // The robot's subsystems and commands are defined here...
   private final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
                                                                                 "swerve/neo"));
@@ -97,6 +102,13 @@ public class RobotContainer
   {
     // Configure the trigger bindings
     configureBindings();
+
+    // Register pivot commands
+    NamedCommands.registerCommand("moveToGroundIntake", pivotSubsystem.moveToGroundIntake());
+    NamedCommands.registerCommand("moveToAlgae1", pivotSubsystem.moveToAlgae1());
+    NamedCommands.registerCommand("moveToAlgae2", pivotSubsystem.moveToAlgae2());
+    NamedCommands.registerCommand("moveToAlgae3", pivotSubsystem.moveToAlgae3());
+
     DriverStation.silenceJoystickConnectionWarning(true);
     NamedCommands.registerCommand("test", Commands.print("I EXIST"));
   }
@@ -175,6 +187,11 @@ public class RobotContainer
       driverXbox.rightBumper().onTrue(Commands.none());
     }
 
+    // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
+    driverXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
+    driverXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
+    driverXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
+    driverXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
   }
 
   /**
@@ -191,5 +208,8 @@ public class RobotContainer
   public void setMotorBrake(boolean brake)
   {
     drivebase.setMotorBrake(brake);
-  }
 }
+
+
+
+  }

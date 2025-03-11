@@ -1,6 +1,6 @@
 {
-  "robotWidth": 0.9,
-  "robotLength": 0.9,
+  "robotWidth": 0.7112,
+  "robotLength": 0.7112,
   "holonomicMode": true,
   "pathFolders": [],
   "autoFolders": [],
@@ -26,7 +26,7 @@
   "blModuleY": 0.273,
   "brModuleX": -0.273,
   "brModuleY": -0.273,
-  "bumperOffsetX": 0.9,
-  "bumperOffsetY": 0.9,
+  "bumperOffsetX": 0.05,
+  "bumperOffsetY": 0.05,
   "robotFeatures": []
 }
