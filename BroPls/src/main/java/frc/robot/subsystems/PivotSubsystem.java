@@ -1,4 +1,4 @@
-package frc.robot.subsystems;
+package frc.robot.subsystems; 
 
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
@@ -7,6 +7,7 @@ import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class PivotSubsystem extends SubsystemBase {
@@ -26,10 +27,14 @@ public class PivotSubsystem extends SubsystemBase {
 
     public PivotSubsystem() {
         m_encoder = pivotMotor.getEncoder();
+
+        pivotMotor.getEncoder().setPosition(0); // Zeroing encoder
+
         m_goalAngle = m_encoder.getPosition(); // Set initial goal to current position
+        SmartDashboard.putNumber("Initial Encoder Position", m_encoder.getPosition()); // Ensure encoder reads angle properly
         
         TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(1, 10);
-        m_controller = new ProfiledPIDController(1.5, 0.0, 0.1, m_constraints, deltaTime);
+        m_controller = new ProfiledPIDController(0.005, 0, 0.00005, m_constraints, deltaTime);
         m_controller.reset(m_encoder.getPosition());
     }
 
@@ -46,76 +51,118 @@ public class PivotSubsystem extends SubsystemBase {
     @Override
     public void periodic() {
         if (!isMovementEnabled) {
-            pivotMotor.set(0);
-            return;
-        }
+            pivotMotor.set(0);  // Stop the motor if movement is not enabled
+        } else {
+            // Add the rest of the movement logic here if movement is enabled
+            m_controller.setGoal(m_goalAngle);
         
-        m_controller.setGoal(m_goalAngle);
+            // Compute motor output using PID
+            double speed = m_controller.calculate(m_encoder.getPosition());
         
-        // Compute motor output using PID
-        double speed = m_controller.calculate(m_encoder.getPosition());
-    
-        // Limit speed to prevent high-torque issues
-        speed = Math.max(-0.2, Math.min(0.2, speed));
-    
-        // Apply speed to motor
-        pivotMotor.set(speed);
-    
-        // Stop motor if it's already at the target
-        if (isPivotAtGoal()) {
-            pivotMotor.stopMotor();
-        }
-    
-        SmartDashboard.putNumber("Pivot Position", m_encoder.getPosition());
-        SmartDashboard.putNumber("Pivot Speed", speed);
-    }
-    
-
-    
-
-    public enum Positions {
-        GROUND_INTAKE,
-        ALGAE1,
-        ALGAE2,
-        ALGAE3
-    }
-
-    public void goToAngle(Positions position) {
-        if (!isPivotAtGoal()) { // Prevent changing targets rapidly
-            switch (position) {
-                case GROUND_INTAKE:
-                    setGoalAngle(groundIntake);
-                    break;
-                case ALGAE1:
-                    setGoalAngle(algae1);
-                    break;
-                case ALGAE2:
-                    setGoalAngle(algae2);
-                    break;
-                case ALGAE3:
-                    setGoalAngle(algae3);
-                    break;
+            // Limit speed to prevent high-torque issues
+            speed = Math.max(-0.5, Math.min(0.5, speed));
+        
+            // Apply speed to motor
+            pivotMotor.set(speed);
+        
+            // Stop motor if it's already at the target
+            if (isPivotAtGoal()) {
+                pivotMotor.stopMotor();
+                isMovementEnabled = false;
             }
+        
+            SmartDashboard.putNumber("Pivot Position", m_encoder.getPosition());
+            SmartDashboard.putNumber("Pivot Goal Position", m_goalAngle);
+            SmartDashboard.putNumber("Pivot Speed", speed);
+            SmartDashboard.putBoolean("Pivot At Goal", isPivotAtGoal());
         }
     }
 
-  public boolean isPivotAtGoal() {
-    return Math.abs(m_encoder.getPosition() - m_goalAngle) < 0.03;
-  }
+    public void goToGroundIntake() {
+        setGoalAngle(PivotSubsystem.groundIntake);
+    }
 
-  public Command moveToGroundIntake() {
-    return this.run(() -> goToAngle(Positions.GROUND_INTAKE));
-  }
+    public void goToAlgae1() {
+        setGoalAngle(PivotSubsystem.algae1);
+    }
 
-  public Command moveToAlgae1() {
-    return this.run(() -> goToAngle(Positions.ALGAE1));
-  }
+    public void goToAlgae2() {
+        setGoalAngle(PivotSubsystem.algae2);
+    }
 
-  public Command moveToAlgae2() {
-    return this.run(() -> goToAngle(Positions.ALGAE2));
-  }
+    public void goToAlgae3() {
+        setGoalAngle(PivotSubsystem.algae3);
+    }
 
-  public Command moveToAlgae3() {
-    return this.run(() -> goToAngle(Positions.ALGAE3));
-  }
+    public boolean isPivotAtGoal() {
+        double currentPosition = m_encoder.getPosition();
+        double error = Math.abs(currentPosition - m_goalAngle);
+        
+        // Debug values
+        SmartDashboard.putNumber("Pivot Error", error);
+        SmartDashboard.putNumber("Current Position", currentPosition);
+        SmartDashboard.putNumber("Goal Position", m_goalAngle);
+        
+        return error < 0.5; // Increased tolerance
+    }
+
+    public Command moveToGroundIntake() {
+        return this.runOnce(() -> {
+            setGoalAngle(groundIntake);
+            isMovementEnabled = true;
+        })
+        .andThen(this.run(() -> {}))
+        .until(() -> {
+            // Only end the command once we've started moving AND reached the goal
+            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
+            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
+            boolean atGoal = error < 0.03;
+            return atGoal && !isMoving;
+        });
+    }
+    
+    public Command moveToAlgae1() {
+        return this.runOnce(() -> {
+            setGoalAngle(algae1);
+            isMovementEnabled = true;
+        })
+        .andThen(this.run(() -> {}))
+        .until(() -> {
+            // Only end the command once we've started moving AND reached the goal
+            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
+            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
+            boolean atGoal = error < 0.03;
+            return atGoal && !isMoving;
+        });
+    }
+    
+    public Command moveToAlgae2() {
+        return this.runOnce(() -> {
+            setGoalAngle(algae2);
+            isMovementEnabled = true;
+        })
+        .andThen(this.run(() -> {}))
+        .until(() -> {
+            // Only end the command once we've started moving AND reached the goal
+            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
+            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
+            boolean atGoal = error < 0.03;
+            return atGoal && !isMoving;
+        });
+    }
+    
+    public Command moveToAlgae3() {
+        return this.runOnce(() -> {
+            setGoalAngle(algae3);
+            isMovementEnabled = true;
+        })
+        .andThen(this.run(() -> {}))
+        .until(() -> {
+            // Only end the command once we've started moving AND reached the goal
+            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
+            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
+            boolean atGoal = error < 0.03;
+            return atGoal && !isMoving;
+        });
+    }
 }

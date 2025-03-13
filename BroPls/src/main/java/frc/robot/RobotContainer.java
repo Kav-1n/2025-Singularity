@@ -35,6 +35,7 @@ public class RobotContainer
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
   final         CommandXboxController driverXbox = new CommandXboxController(0);
+  final         CommandXboxController operatorXbox = new CommandXboxController(1);
 
   private final PivotSubsystem pivotSubsystem = new PivotSubsystem();
 
@@ -188,10 +189,10 @@ public class RobotContainer
     }
 
     // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
-    driverXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
-    driverXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
-    driverXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
-    driverXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
+    operatorXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
+    operatorXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
+    operatorXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
+    operatorXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
   }
 
   /**
