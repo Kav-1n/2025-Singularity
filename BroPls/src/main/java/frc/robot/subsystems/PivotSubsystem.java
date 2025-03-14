@@ -33,8 +33,8 @@ public class PivotSubsystem extends SubsystemBase {
         m_goalAngle = m_encoder.getPosition(); // Set initial goal to current position
         SmartDashboard.putNumber("Initial Encoder Position", m_encoder.getPosition()); // Ensure encoder reads angle properly
         
-        TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(1, 10);
-        m_controller = new ProfiledPIDController(0.005, 0, 0.00005, m_constraints, deltaTime);
+        TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(3, 1);
+        m_controller = new ProfiledPIDController(0.05, 0, 0.0, m_constraints);
         m_controller.reset(m_encoder.getPosition());
     }
 
