@@ -1,3 +1,5 @@
+
+
 package frc.robot.subsystems;
 
 import com.ctre.phoenix6.hardware.TalonFX;
@@ -122,4 +124,3 @@ public class ShooterSubsystem extends SubsystemBase {
         SmartDashboard.putNumber("Right Motor Output", rightMotor.get());
     }
 }
-
