@@ -6,11 +6,11 @@ import frc.robot.subsystems.ShooterSubsystem;
 
 public class ShooterCommand {
     private final ShooterSubsystem shooter;
-    private final CommandXboxController operatorXbox;
-    
-    public ShooterCommand(ShooterSubsystem shooter, CommandXboxController operatorXbox) {
-        this.shooter = shooter;
-        this.operatorXbox = operatorXbox;
+    public CommandXboxController operatorXbox = new CommandXboxController(1);
+        
+        public ShooterCommand(ShooterSubsystem shooter, CommandXboxController operatorXbox) {
+            this.shooter = shooter;
+            this.operatorXbox = operatorXbox;
     }
     
     /**

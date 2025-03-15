@@ -16,14 +16,14 @@ public class Elevator extends SubsystemBase {
     private static final double SPEED_REDUCTION = 7.5; // Speed reduction ratio
     
     // Define preset positions (in motor rotations)
-    private static final double GROUND_INTAKE_POSITION = 0.0; // Placeholder
-    private static final double ALGAE1_POSITION = 10.0; // Placeholder
-    private static final double ALGAE2_POSITION = 20.0; // Placeholder
-    private static final double BARGE_SHOOT_POSITION = 30.0; // Placeholder
+    private static final double GROUND_INTAKE_POSITION_E = 0.0; // Placeholder
+    private static final double ALGAE1_POSITION_E = 10.0; // Placeholder
+    private static final double ALGAE2_POSITION_E = 20.0; // Placeholder
+    private static final double BARGE_SHOOT_POSITION_E = 30.0; // Placeholder
     
     // Motor control constants
     private static final double MAX_VOLTAGE = 12.0;
-    private static final double MANUAL_SPEED = 0.3; // Speed for manual control
+    private static final double MANUAL_SPEED = 5; // Speed for manual control
     private static final double JOYSTICK_DEADBAND = 0.1;
     
     // Hardware
@@ -94,7 +94,7 @@ public class Elevator extends SubsystemBase {
      * @param operatorXbox The operator's CommandXboxController
      * @return A command that moves the elevator based on joystick input
      */
-    public Command createJoystickCommand(CommandXboxController operatorXbox) {
+    public Command createJoystickCommandE(CommandXboxController operatorXbox) {
         return run(() -> {
             // Get joystick value (negative is down, positive is up)
             double speed = -operatorXbox.getLeftY() * MANUAL_SPEED;
@@ -106,32 +106,32 @@ public class Elevator extends SubsystemBase {
      * Create a command to move the elevator to the ground intake position
      * @return A command that moves the elevator to the ground intake position
      */
-    public Command createGroundIntakeCommand() {
-        return run(() -> goToPosition(GROUND_INTAKE_POSITION));
+    public Command createGroundIntakeCommandE() {
+        return run(() -> goToPosition(GROUND_INTAKE_POSITION_E));
     }
     
     /**
      * Create a command to move the elevator to the first algae position
      * @return A command that moves the elevator to the first algae position
      */
-    public Command createAlgae1Command() {
-        return run(() -> goToPosition(ALGAE1_POSITION));
+    public Command createAlgae1CommandE() {
+        return run(() -> goToPosition(ALGAE1_POSITION_E));
     }
     
     /**
      * Create a command to move the elevator to the second algae position
      * @return A command that moves the elevator to the second algae position
      */
-    public Command createAlgae2Command() {
-        return run(() -> goToPosition(ALGAE2_POSITION));
+    public Command createAlgae2CommandE() {
+        return run(() -> goToPosition(ALGAE2_POSITION_E));
     }
     
     /**
      * Create a command to move the elevator to the barge shooting position
      * @return A command that moves the elevator to the barge shooting position
      */
-    public Command createBargeShootCommand() {
-        return run(() -> goToPosition(BARGE_SHOOT_POSITION));
+    public Command createBargeShootCommandE() {
+        return run(() -> goToPosition(BARGE_SHOOT_POSITION_E));
     }
     
     /**

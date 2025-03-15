@@ -11,12 +11,12 @@ import frc.robot.subsystems.PivotSubsystem;
 public class CommandFactory {
     private final Elevator elevator;
     private final PivotSubsystem pivot;
-    private final CommandXboxController operatorXbox;
-    
-    public CommandFactory(Elevator elevator, PivotSubsystem pivot, CommandXboxController operatorXbox) {
-        this.elevator = elevator;
-        this.pivot = pivot;
-        this.operatorXbox = operatorXbox;
+    public CommandXboxController operatorXbox = new CommandXboxController(1);
+        
+        public CommandFactory(Elevator elevator, PivotSubsystem pivot, CommandXboxController operatorXbox) {
+            this.elevator = elevator;
+            this.pivot = pivot;
+            this.operatorXbox = operatorXbox;
     }
     
     /**
@@ -24,27 +24,27 @@ public class CommandFactory {
      */
     public void configureButtonBindings() {
         // Set default commands for manual control
-        elevator.setDefaultCommand(elevator.createJoystickCommand(operatorXbox));
+        elevator.setDefaultCommand(elevator.createJoystickCommandE(operatorXbox));
         pivot.setDefaultCommand(pivot.createJoystickCommand(operatorXbox));
         
         // Create combined preset commands
         Command groundIntakeCommand = new ParallelCommandGroup(
-            elevator.createGroundIntakeCommand(),
+            elevator.createGroundIntakeCommandE(),
             pivot.createGroundIntakeCommand()
         );
         
         Command algae1Command = new ParallelCommandGroup(
-            elevator.createAlgae1Command(),
+            elevator.createAlgae1CommandE(),
             pivot.createAlgae1Command()
         );
         
         Command algae2Command = new ParallelCommandGroup(
-            elevator.createAlgae2Command(),
+            elevator.createAlgae2CommandE(),
             pivot.createAlgae2Command()
         );
         
         Command bargeShootCommand = new ParallelCommandGroup(
-            elevator.createBargeShootCommand(),
+            elevator.createBargeShootCommandE(),
             pivot.createBargeShootCommand()
         );
         

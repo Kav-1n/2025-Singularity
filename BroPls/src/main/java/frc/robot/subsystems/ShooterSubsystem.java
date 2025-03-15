@@ -10,9 +10,6 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class ShooterSubsystem extends SubsystemBase {
-    // Motor IDs
-    private static final int LEFT_MOTOR_ID = 17;
-    private static final int RIGHT_MOTOR_ID = 18;
     
     // Motor speeds
     private static final double INTAKE_SPEED = 0.7; // 70% speed for intake
@@ -35,8 +32,8 @@ public class ShooterSubsystem extends SubsystemBase {
 
     public ShooterSubsystem() {
         // Initialize motors
-        leftMotor = new TalonFX(LEFT_MOTOR_ID);
-        rightMotor = new TalonFX(RIGHT_MOTOR_ID);
+        leftMotor = new TalonFX(17);
+        rightMotor = new TalonFX(18);
         
         // Configure motors
         configureMotors();
