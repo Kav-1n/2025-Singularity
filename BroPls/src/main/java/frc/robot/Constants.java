@@ -41,6 +41,10 @@ public final class Constants
 //    public static final PIDConstants ANGLE_PID       = new PIDConstants(0.4, 0, 0.01);
 //  }
 
+  public static class AutoNames{
+    public static final String LEAVEAUTO = "LeaveAuto";
+  }
+
   public static final class DrivebaseConstants
   {
 
@@ -57,8 +61,8 @@ public final class Constants
     public static final double RIGHT_X_DEADBAND = 0.1;
     public static final double TURN_CONSTANT    = 6;
   }
-  public static final int kElevatorMotor1ID = 8;
-  public static final int kElevatorMotor2ID = 6;
+  public static final int kElevatorMotor1ID = 15;
+  public static final int kElevatorMotor2ID = 16;
 
   public static final int kBottomLimitSwitchID = 0;
 
@@ -125,8 +129,18 @@ public final class Constants
           .velocityConversionFactor(kEncoderVelocityConversionFactor);
 
 
+          }
+
+          public static class MotorControllers {
+            public static final int SMART_CURRENT_LIMIT = 40;
+           //Motor ID Numbers
+            //Elevator 
+            public static final int ID_ELEVATOR_LEFT_TALON = 15;
+            public static final int ID_ELEVATOR_RIGHT_TALON = 16;
+          }        
 
 
+        
 
-}
+
 }

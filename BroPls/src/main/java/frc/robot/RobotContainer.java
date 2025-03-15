@@ -24,6 +24,9 @@ import java.io.File;
 import swervelib.SwerveInputStream;
 import frc.robot.subsystems.PivotSubsystem;
 import edu.wpi.first.wpilibj2.command.Commands;
+import frc.robot.subsystems.Elevator;
+import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj2.command.button.POVButton;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a "declarative" paradigm, very
@@ -34,10 +37,11 @@ public class RobotContainer
 {
 
   // Replace with CommandPS4Controller or CommandJoystick if needed
-  final         CommandXboxController driverXbox = new CommandXboxController(0);
-  final         CommandXboxController operatorXbox = new CommandXboxController(1);
+  public final CommandXboxController driverXbox = new CommandXboxController(0);
+  public final CommandXboxController operatorXbox = new CommandXboxController(1);
 
   private final PivotSubsystem pivotSubsystem = new PivotSubsystem();
+  private final Elevator elevator = new Elevator();
 
   // The robot's subsystems and commands are defined here...
   private final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
@@ -47,8 +51,8 @@ public class RobotContainer
    * Converts driver input into a field-relative ChassisSpeeds that is controlled by angular velocity.
    */
   SwerveInputStream driveAngularVelocity = SwerveInputStream.of(drivebase.getSwerveDrive(),
-                                                                () -> driverXbox.getLeftY() * -1,
-                                                                () -> driverXbox.getLeftX() * -1)
+                                                                () -> driverXbox.getLeftY() ,
+                                                                () -> driverXbox.getLeftX() )
                                                             .withControllerRotationAxis(driverXbox::getRightX)
                                                             .deadband(OperatorConstants.DEADBAND)
                                                             .scaleTranslation(0.8)
@@ -104,11 +108,6 @@ public class RobotContainer
     // Configure the trigger bindings
     configureBindings();
 
-    // Register pivot commands
-    NamedCommands.registerCommand("moveToGroundIntake", pivotSubsystem.moveToGroundIntake());
-    NamedCommands.registerCommand("moveToAlgae1", pivotSubsystem.moveToAlgae1());
-    NamedCommands.registerCommand("moveToAlgae2", pivotSubsystem.moveToAlgae2());
-    NamedCommands.registerCommand("moveToAlgae3", pivotSubsystem.moveToAlgae3());
 
     DriverStation.silenceJoystickConnectionWarning(true);
     NamedCommands.registerCommand("test", Commands.print("I EXIST"));
@@ -188,11 +187,13 @@ public class RobotContainer
       driverXbox.rightBumper().onTrue(Commands.none());
     }
 
-    // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
-    operatorXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
-    operatorXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
-    operatorXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
-    operatorXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
+    // // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
+    // operatorXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
+    // operatorXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
+    // operatorXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
+    // operatorXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
+
+    
   }
 
   /**
@@ -203,7 +204,7 @@ public class RobotContainer
   public Command getAutonomousCommand()
   {
     // An example command will be run in autonomous
-    return drivebase.getAutonomousCommand("New Auto");
+    return drivebase.getAutonomousCommand("LeaveLeftBlue.path");
   }
 
   public void setMotorBrake(boolean brake)
