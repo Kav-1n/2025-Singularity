@@ -24,10 +24,10 @@ import frc.robot.subsystems.SwerveSubsystem;
 import java.io.File;
 import swervelib.SwerveInputStream;
 import frc.robot.subsystems.PivotSubsystem;
-import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.subsystems.Elevator;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.button.POVButton;
+import frc.robot.subsystems.ShooterSubsystem;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a "declarative" paradigm, very
@@ -41,8 +41,9 @@ public class RobotContainer
   public final CommandXboxController driverXbox = new CommandXboxController(0);
   public final CommandXboxController operatorXbox = new CommandXboxController(1);
 
-  private final PivotSubsystem pivotSubsystem = new PivotSubsystem();
+  private final PivotSubsystem m_pivotSubsystem = new PivotSubsystem();
   private final Elevator elevator = new Elevator();
+  private final ShooterSubsystem shooterSubsystem = new ShooterSubsystem();
 
   // The robot's subsystems and commands are defined here...
   private final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
@@ -109,6 +110,21 @@ public class RobotContainer
     // Configure the trigger bindings
     configureBindings();
 
+    // Set up elevator manual control with left joystick
+    elevator.setDefaultCommand(
+        Commands.run(() -> {
+            double joystickValue = -operatorXbox.getLeftY();
+            elevator.setManualSpeed(joystickValue * 0.3);
+        }, elevator)
+    );
+
+    // Set up pivot manual control with right joystick
+    m_pivotSubsystem.setDefaultCommand(
+        Commands.run(() -> {
+            double joystickValue = operatorXbox.getRightY();
+            m_pivotSubsystem.manualControl(joystickValue);
+        }, m_pivotSubsystem)
+    );
 
     DriverStation.silenceJoystickConnectionWarning(true);
     NamedCommands.registerCommand("test", Commands.print("I EXIST"));
@@ -187,14 +203,168 @@ public class RobotContainer
       driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
       driverXbox.start().onTrue(Commands.none());
     }
-
-    // // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
-    // operatorXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
-    // operatorXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
-    // operatorXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
-    // operatorXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
-
     
+    // Coordinated preset position commands - pivot moves first, then elevator
+    // When button is released, elevator returns to zero first, then pivot
+    operatorXbox.a().whileTrue(createCoordinatedGroundIntakeCommand());
+    operatorXbox.b().whileTrue(createCoordinatedAlgae1Command());
+    operatorXbox.x().whileTrue(createCoordinatedAlgae2Command());
+    operatorXbox.y().whileTrue(createCoordinatedBargeCommand());
+
+    // Keep the D-pad for individual elevator control (if desired)
+    operatorXbox.povUp().whileTrue(elevator.createAlgae1Command());
+    operatorXbox.povRight().whileTrue(elevator.createAlgae2Command());
+    operatorXbox.povLeft().whileTrue(elevator.createBargeCommand());
+    operatorXbox.povDown().onTrue(elevator.createMoveToZeroCommand());
+
+    // Reset encoders and emergency stop
+    operatorXbox.leftBumper().onTrue(m_pivotSubsystem.createResetEncoderCommand());
+    operatorXbox.rightBumper().onTrue(elevator.createZeroEncoderCommand());
+
+    // Shooter subsystem commands - left trigger for intake, right trigger for shooting
+    Trigger operatorLeftTrigger = new Trigger(() -> operatorXbox.getLeftTriggerAxis() > 0.1);
+    Trigger operatorRightTrigger = new Trigger(() -> operatorXbox.getRightTriggerAxis() > 0.1);
+    
+    operatorLeftTrigger.whileTrue(
+        Commands.runEnd(
+            // While active, run intake
+            () -> shooterSubsystem.intake(),
+            // When finished, stop motors
+            () -> shooterSubsystem.stop(),
+            shooterSubsystem
+        )
+    );
+    
+    operatorRightTrigger.whileTrue(
+        Commands.runEnd(
+            // While active, run shooter
+            () -> shooterSubsystem.shoot(),
+            // When finished, stop motors
+            () -> shooterSubsystem.stop(),
+            shooterSubsystem
+        )
+    );
+
+    // Emergency stop button combination (press both bumpers together)
+    Trigger bothBumpers = operatorXbox.rightBumper().and(operatorXbox.leftBumper());
+    bothBumpers.onTrue(Commands.runOnce(() -> {
+        // Emergency stop function
+        System.out.println("EMERGENCY STOP ACTIVATED");
+        elevator.stopAndHold(); // This will stop the elevator and hold position
+        m_pivotSubsystem.stopMovement(); // Stop the pivot subsystem
+        shooterSubsystem.stop(); // Stop the shooter
+    }));
+  }
+  
+  /**
+   * Creates a fixed command sequence that coordinates pivot and elevator movement
+   * with improved reliability and no oscillation.
+   * 
+   * @param pivotPosition The pivot position to move to
+   * @param elevatorPosition The elevator position to move to
+   * @return A coordinated command sequence
+   */
+  private Command createCoordinatedMovementCommand(double pivotPosition, double elevatorPosition) {
+    return Commands.sequence(
+        // First move pivot to desired position - use direct command instead of the command factory
+        Commands.runOnce(() -> {
+            System.out.println("Starting coordinated movement - Moving pivot to: " + pivotPosition);
+            m_pivotSubsystem.setGoalAngle(pivotPosition);
+        }, m_pivotSubsystem),
+        
+        // Wait until pivot reaches position or timeout
+        Commands.run(() -> {
+            // The pivot's periodic method handles the actual movement
+        }, m_pivotSubsystem)
+        .until(() -> m_pivotSubsystem.isPivotAtGoal())
+        .withTimeout(3), // Timeout for safety
+        
+        // Once pivot is at position, start the elevator
+        Commands.runOnce(() -> {
+            System.out.println("Pivot positioned, now moving elevator to: " + elevatorPosition);
+            // Direct command to elevator to move to position
+        }),
+        
+        // Now run the elevator's command (not as a sequence member, but as a parallel command)
+        Commands.parallel(
+            // Hold the pivot in position
+            Commands.run(() -> {
+                // Pivot will hold position thanks to its periodic method
+            }, m_pivotSubsystem),
+            
+            // Run the elevator to position
+            elevator.createPresetHeightCommand(elevatorPosition)
+        ),
+        
+        // The elevator command contains the waitUntil(false) that keeps everything active
+        // until the button is released, and its finallyDo handles returning to zero
+        
+        // Wait indefinitely until button is released
+        Commands.waitUntil(() -> false)
+    ).finallyDo((interrupted) -> {
+        // When button is released, reverse the sequence
+        System.out.println("Button released, returning to zero in sequence");
+        
+        // Create and schedule the return sequence
+        Commands.sequence(
+            // First move elevator down to zero
+            Commands.runOnce(() -> {
+                System.out.println("Moving elevator to zero");
+                elevator.setPosition(0); // Direct command to move to zero
+            }, elevator),
+            
+            // Wait until elevator is near zero
+            Commands.run(() -> {})
+            .until(() -> Math.abs(elevator.getCurrentPosition()) < 0.5)
+            .withTimeout(3), // Safety timeout
+            
+            // Then move pivot back to zero
+            Commands.runOnce(() -> {
+                System.out.println("Moving pivot to zero");
+                m_pivotSubsystem.setGoalAngle(0);
+            }, m_pivotSubsystem)
+        ).schedule();
+    });
+  }
+
+  /**
+   * Creates the Ground Intake coordinated position command
+   */
+  private Command createCoordinatedGroundIntakeCommand() {
+    return createCoordinatedMovementCommand(
+        3.0, // Ground intake pivot position
+        12.0 // Algae1 elevator position
+    );
+  }
+
+  /**
+   * Creates the Algae1 coordinated position command
+   */
+  private Command createCoordinatedAlgae1Command() {
+    return createCoordinatedMovementCommand(
+        0.5, // Algae1 pivot position
+        12.0 // Algae1 elevator position
+    );
+  }
+
+  /**
+   * Creates the Algae2 coordinated position command
+   */
+  private Command createCoordinatedAlgae2Command() {
+    return createCoordinatedMovementCommand(
+        0.7, // Algae2 pivot position
+        22.0 // Algae2 elevator position
+    );
+  }
+
+  /**
+   * Creates the Barge Shoot coordinated position command
+   */
+  private Command createCoordinatedBargeCommand() {
+    return createCoordinatedMovementCommand(
+        0.9, // Barge pivot position
+        30.0 // Barge elevator position
+    );
   }
 
   /**

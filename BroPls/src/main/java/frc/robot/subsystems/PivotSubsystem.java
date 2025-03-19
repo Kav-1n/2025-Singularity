@@ -1,6 +1,5 @@
 package frc.robot.subsystems;
 
-
 import com.revrobotics.RelativeEncoder;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.SparkMax;
@@ -9,58 +8,77 @@ import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-
 
 public class PivotSubsystem extends SubsystemBase {
-
-
     private static final int pivotMotorID = 45;
     private final SparkMax pivotMotor = new SparkMax(pivotMotorID, MotorType.kBrushless);
     private final RelativeEncoder m_encoder;
     private final ProfiledPIDController m_controller;
+    private final ProfiledPIDController m_holdController; // Separate controller for holding position
     
-    // Manual control constants
-    private static final double MANUAL_SPEED = 10; // Speed multiplier for manual control
+    // Manual control constants - REDUCED FOR SMOOTHER OPERATION
+    private static final double MANUAL_SPEED = 0.4; // Reduced from 1.0 to make movement gentler
     private static final double JOYSTICK_DEADBAND = 0.1;
 
-
-    // Renamed constants to match elevator subsystem
+    // Position constants
+    private static final double ZERO_POSITION = 0.0;
     private static final double GROUND_INTAKE_POSITION = 3.0; // Placeholder angle
     private static final double ALGAE1_POSITION = 0.5; // Placeholder angle
     private static final double ALGAE2_POSITION = 0.7; // Placeholder angle
-    private static final double BARGE_SHOOT_POSITION = 0.9; // Placeholder angle (was algae3)
+    private static final double BARGE_SHOOT_POSITION = 0.9; // Placeholder angle
     
-    private double m_goalAngle = GROUND_INTAKE_POSITION;
+    private double m_goalAngle = 0.0; // Start at zero position instead of preset
     private boolean isMovementEnabled = false;
     private boolean isManualControl = false;
-
+    private boolean holdPosition = true; // START in hold position mode to prevent drift at startup
+    private double lastVelocity = 0;
+    private boolean hasBeenReset = false; // Flag to track if we've been reset during this session
 
     public PivotSubsystem() {
         m_encoder = pivotMotor.getEncoder();
-        pivotMotor.getEncoder().setPosition(0); // Zeroing encoder
-
-
-        m_goalAngle = m_encoder.getPosition(); // Set initial goal to current position
+        
+        // Don't auto-zero encoder on startup to maintain position across restarts
+        if (!hasBeenReset) {
+            // Set initial goal to current position, not a preset
+            m_goalAngle = m_encoder.getPosition();
+        }
+        
         SmartDashboard.putNumber("Initial Encoder Position", m_encoder.getPosition());
        
-        TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(10, 1);
-        m_controller = new ProfiledPIDController(0.01, 0, 0.005, m_constraints);
+        // Movement constraints - SLOWER FOR SMOOTHER OPERATION
+        TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(5, 0.5); // Reduced velocity and acceleration
+        
+        // Main controller for movement to target - GENTLER PID VALUES
+        m_controller = new ProfiledPIDController(0.03, 0.01, 0.05, m_constraints);
         m_controller.reset(m_encoder.getPosition());
+        
+        // Holding controller with even gentler values
+        m_holdController = new ProfiledPIDController(0.008, 0.002, 0.003, m_constraints);
+        m_holdController.reset(m_encoder.getPosition());
+        m_holdController.setGoal(m_encoder.getPosition()); // Initialize with current position
+        
+        // Wider tolerance for hold controller
+        m_holdController.setTolerance(0.2);
     }
-
 
     public void setGoalAngle(double angle) {
         m_goalAngle = angle;
         isMovementEnabled = true;
-        isManualControl = false;  // Disable manual control when setting a goal angle
+        isManualControl = false;
+        holdPosition = false;
+        
+        // Reset both controllers with the new goal
+        m_controller.reset(m_encoder.getPosition());
+        m_holdController.reset(m_encoder.getPosition());
     }
 
-
     public void stopMovement() {
+        // Don't disable position holding when stopping, just stop active movement
         isMovementEnabled = false;
         isManualControl = false;
+        // Don't change holdPosition - keep it as is to maintain position
         pivotMotor.set(0);
     }
     
@@ -71,87 +89,147 @@ public class PivotSubsystem extends SubsystemBase {
     public void manualControl(double speed) {
         // Apply deadband
         if (Math.abs(speed) < JOYSTICK_DEADBAND) {
-            speed = 0;
+            // If we were in manual control but now joystick is released, switch to hold position
             if (isManualControl) {
+                isManualControl = false;
+                holdPosition = true;
+                
+                // First stop the motor immediately to prevent continued motion
                 pivotMotor.set(0);
+                
+                // Update goal angle to current position for holding
+                m_goalAngle = m_encoder.getPosition();
+                
+                // Reset hold controller at current position
+                m_holdController.reset(m_encoder.getPosition());
+                m_holdController.setGoal(m_goalAngle);
+                
+                // Enabled for position holding
+                isMovementEnabled = true;
             }
             return;
         }
         
+        // Joystick is being actively used, enable manual control
+        
         // Invert speed for desired direction (joystick up = pivot down)
-        
-        
         speed = -speed;
+        
+        // Apply non-linear curve for finer control at low speeds
+        speed = Math.signum(speed) * Math.pow(Math.abs(speed), 1.5);
         
         // Apply manual speed multiplier
         speed *= MANUAL_SPEED;
         
-        // Set manual control flag and disable automatic movement
+        // Set manual control flag and disable other modes
         isManualControl = true;
         isMovementEnabled = false;
+        holdPosition = false;
         
-        // Apply speed to motor
+        // Apply speed to motor with additional smoothing
         pivotMotor.set(speed);
         
-        // Update goal angle to current position (for smoother transition to automatic control)
+        // Update goal angle to current position
         m_goalAngle = m_encoder.getPosition();
     }
-
+    
+    /**
+     * Move to zero position
+     */
+    public void moveToZero() {
+        System.out.println("Moving pivot to zero position");
+        setGoalAngle(ZERO_POSITION);
+    }
 
     @Override
     public void periodic() {
-        if (isManualControl) {
+        // Track velocity for use in determining when arm has stopped
+        lastVelocity = m_encoder.getVelocity();
+        
+        // If this is the first periodic call after startup, initialize hold position
+        if (!isManualControl && !isMovementEnabled && holdPosition) {
+            // Reset hold controller to maintain current position
+            m_holdController.setGoal(m_encoder.getPosition());
+        }
+        
+        // Handle position holding
+        if (holdPosition) {
+            // Hold position logic - using gentler PID values
+            SmartDashboard.putBoolean("Pivot Manual Control", false);
+            SmartDashboard.putBoolean("Pivot Hold Position", true);
+            
+            // Use hold controller to maintain position
+            double currentPosition = m_encoder.getPosition();
+            double speed = m_holdController.calculate(currentPosition);
+            
+            // Apply a more restrictive speed limit for holding to prevent oscillations
+            speed = Math.max(-0.07, Math.min(0.07, speed)); // Reduced from 0.1
+            
+            // Only apply motor power if the error is above a minimum threshold
+            double error = Math.abs(currentPosition - m_goalAngle);
+            if (error > 0.1) { // Increased threshold to reduce small adjustments
+                pivotMotor.set(speed);
+            } else {
+                // Very small error, apply minimal holding power
+                double holdingPower = 0.005 * Math.signum(speed); // Reduced from 0.01
+                pivotMotor.set(holdingPower);
+            }
+        } else if (isManualControl) {
             // Manual control is handled in the manualControl method
             SmartDashboard.putBoolean("Pivot Manual Control", true);
-        } else if (!isMovementEnabled) {
-            pivotMotor.set(0);  // Stop the motor if movement is not enabled
-            SmartDashboard.putBoolean("Pivot Manual Control", false);
-        } else {
+            SmartDashboard.putBoolean("Pivot Hold Position", false);
+        } else if (isMovementEnabled) {
             // Automatic movement logic
+            SmartDashboard.putBoolean("Pivot Manual Control", false);
+            SmartDashboard.putBoolean("Pivot Hold Position", false);
+            
             m_controller.setGoal(m_goalAngle);
        
             // Compute motor output using PID
             double currentPosition = m_encoder.getPosition();
-            double speed = m_controller.calculate(currentPosition, m_goalAngle);
+            double speed = m_controller.calculate(currentPosition);
        
-            // Limit speed to prevent high-torque issues
-            speed = Math.max(-0.5, Math.min(0.5, speed));
+            // Limit speed to prevent high-torque issues - REDUCED FOR SMOOTHER OPERATION
+            speed = Math.max(-0.3, Math.min(0.3, speed)); // Reduced from 0.5
        
             // Apply speed to motor
             pivotMotor.set(speed);
        
             // Stop motor if it's already at the target
             if (isPivotAtGoal()) {
-                pivotMotor.stopMotor();
+                // Don't stop the motor completely - switch to hold position mode
+                holdPosition = true;
                 isMovementEnabled = false;
+                m_holdController.reset(currentPosition);
+                m_holdController.setGoal(m_goalAngle);
             }
-            
-            SmartDashboard.putBoolean("Pivot Manual Control", false);
+        } else {
+            // We're not in any active control mode, maintain position
+            holdPosition = true;
+            m_goalAngle = m_encoder.getPosition();
+            m_holdController.setGoal(m_goalAngle);
         }
         
         // Always update these values
         SmartDashboard.putNumber("Pivot Position", m_encoder.getPosition());
         SmartDashboard.putNumber("Pivot Goal Position", m_goalAngle);
         SmartDashboard.putNumber("Pivot Speed", pivotMotor.get());
+        SmartDashboard.putNumber("Pivot Velocity", m_encoder.getVelocity());
         SmartDashboard.putBoolean("Pivot At Goal", isPivotAtGoal());
     }
 
-
-    // Renamed methods to match elevator subsystem
+    // Preset position methods
     public void goToGroundIntake() {
         setGoalAngle(GROUND_INTAKE_POSITION);
     }
-
 
     public void goToAlgae1() {
         setGoalAngle(ALGAE1_POSITION);
     }
 
-
     public void goToAlgae2() {
         setGoalAngle(ALGAE2_POSITION);
     }
-
 
     public void goToBargeShoot() {
         setGoalAngle(BARGE_SHOOT_POSITION);
@@ -164,9 +242,14 @@ public class PivotSubsystem extends SubsystemBase {
         pivotMotor.getEncoder().setPosition(0);
         m_goalAngle = 0;
         m_controller.reset(0);
+        m_holdController.reset(0);
+        m_holdController.setGoal(0);
+        holdPosition = true;  // Enable holding at zero position
+        isMovementEnabled = false;
+        isManualControl = false;
+        hasBeenReset = true;  // Mark that we've been manually reset
         SmartDashboard.putString("Pivot Status", "Encoder Reset");
     }
-
 
     public boolean isPivotAtGoal() {
         double currentPosition = m_encoder.getPosition();
@@ -180,21 +263,6 @@ public class PivotSubsystem extends SubsystemBase {
         return error < 0.5; // Increased tolerance
     }
 
-
-    /**
-     * Create a command to move the pivot with the right joystick
-     * @param operatorXbox The operator's CommandXboxController
-     * @return A command that moves the pivot based on joystick input
-     */
-    public Command createJoystickCommand(CommandXboxController operatorXbox) {
-        return run(() -> {
-            // Get joystick value (up = positive, down = negative)
-            double speed = operatorXbox.getRightY() * MANUAL_SPEED;
-            manualControl(speed);
-        });
-    }
-
-
     /**
      * Create a command to reset the encoder position to zero
      * @return A command that resets the encoder
@@ -202,65 +270,93 @@ public class PivotSubsystem extends SubsystemBase {
     public Command createResetEncoderCommand() {
         return runOnce(this::resetEncoder);
     }
-
-
-    // Updated command methods with proper naming to match elevator subsystem
-    public Command createGroundIntakeCommand() {
-        return this.runOnce(() -> {
-            setGoalAngle(GROUND_INTAKE_POSITION);
-            isMovementEnabled = true;
-        })
-        .andThen(this.run(() -> {}))
-        .until(() -> {
-            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
-            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
-            boolean atGoal = error < 0.03;
-            return atGoal && !isMoving;
+    
+    /**
+     * Creates a command to move to a preset position and stay there while button is held,
+     * then return to zero when button is released.
+     * @param targetPosition The target position to move to
+     * @return Command for preset movement with return to zero
+     */
+    private Command createPresetPositionCommand(double targetPosition) {
+        return Commands.sequence(
+            // First run the command to move to the target position
+            Commands.runOnce(() -> {
+                System.out.println("Moving pivot to position: " + targetPosition);
+                setGoalAngle(targetPosition);
+            }),
+            // Run until we reach the target
+            Commands.run(() -> {
+                // The periodic method handles the actual movement
+            })
+            .until(this::isPivotAtGoal),
+            // Hold at the target position
+            Commands.runOnce(() -> {
+                System.out.println("Pivot at target, holding position");
+                holdPosition = true;
+                isMovementEnabled = false;
+                m_holdController.setGoal(targetPosition);
+            }),
+            // Wait indefinitely until button is released
+            Commands.waitUntil(() -> false)
+        ).finallyDo((interrupted) -> {
+            // When button is released or command interrupted
+            System.out.println("Button released, returning pivot to zero");
+            
+            // Create and schedule a return to zero command
+            Commands.sequence(
+                Commands.runOnce(this::moveToZero),
+                Commands.run(() -> {
+                    // The periodic method handles the actual movement
+                })
+                .until(() -> Math.abs(m_encoder.getPosition()) < 0.2),
+                Commands.runOnce(() -> {
+                    // Hold at zero
+                    holdPosition = true;
+                    isMovementEnabled = false;
+                    m_goalAngle = ZERO_POSITION;
+                    m_holdController.setGoal(ZERO_POSITION);
+                })
+            ).schedule();
         });
+    }
+
+    /**
+     * Creates a command to move to zero position
+     */
+    public Command createMoveToZeroCommand() {
+        return Commands.sequence(
+            Commands.runOnce(() -> {
+                System.out.println("Moving pivot to zero");
+                setGoalAngle(ZERO_POSITION);
+            }),
+            Commands.run(() -> {
+                // The periodic method handles the actual movement
+            })
+            .until(() -> Math.abs(m_encoder.getPosition()) < 0.2),
+            Commands.runOnce(() -> {
+                // Hold at zero
+                holdPosition = true;
+                isMovementEnabled = false;
+                m_goalAngle = ZERO_POSITION;
+                m_holdController.setGoal(ZERO_POSITION);
+            })
+        );
+    }
+    
+    // New command methods using the hold-and-return pattern
+    public Command createGroundIntakeCommand() {
+        return createPresetPositionCommand(GROUND_INTAKE_POSITION);
     }
    
     public Command createAlgae1Command() {
-        return this.runOnce(() -> {
-            setGoalAngle(ALGAE1_POSITION);
-            isMovementEnabled = true;
-        })
-        .andThen(this.run(() -> {}))
-        .until(() -> {
-            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
-            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
-            boolean atGoal = error < 0.03;
-            return atGoal && !isMoving;
-        });
+        return createPresetPositionCommand(ALGAE1_POSITION);
     }
    
     public Command createAlgae2Command() {
-        return this.runOnce(() -> {
-            setGoalAngle(ALGAE2_POSITION);
-            isMovementEnabled = true;
-        })
-        .andThen(this.run(() -> {}))
-        .until(() -> {
-            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
-            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
-            boolean atGoal = error < 0.03;
-            return atGoal && !isMoving;
-        });
+        return createPresetPositionCommand(ALGAE2_POSITION);
     }
    
     public Command createBargeShootCommand() {
-        return this.runOnce(() -> {
-            setGoalAngle(BARGE_SHOOT_POSITION);
-            isMovementEnabled = true;
-        })
-        .andThen(this.run(() -> {}))
-        .until(() -> {
-            double error = Math.abs(m_encoder.getPosition() - m_goalAngle);
-            boolean isMoving = Math.abs(m_encoder.getVelocity()) > 0.01;
-            boolean atGoal = error < 0.03;
-            return atGoal && !isMoving;
-        });
+        return createPresetPositionCommand(BARGE_SHOOT_POSITION);
     }
 }
-
-
-

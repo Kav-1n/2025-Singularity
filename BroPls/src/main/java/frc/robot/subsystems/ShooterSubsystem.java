@@ -1,126 +1,82 @@
-
-
 package frc.robot.subsystems;
 
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.NeutralModeValue;
-import com.ctre.phoenix6.controls.VoltageOut;
+import com.ctre.phoenix6.controls.DutyCycleOut;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class ShooterSubsystem extends SubsystemBase {
     
-    // Motor speeds
-    private static final double INTAKE_SPEED = 0.7; // 70% speed for intake
-    private static final double SHOOTING_SPEED = 0.9; // 90% speed for shooting
+    // Define motor CAN IDs
+    private static final int LEFT_MOTOR_ID = 17;
+    private static final int RIGHT_MOTOR_ID = 18;
     
-    // Motor control constants
-    private static final double MAX_VOLTAGE = 12.0;
-    private static final double TRIGGER_THRESHOLD = 0.1; // Deadband for triggers
-    
-    // Hardware
-    private final TalonFX leftMotor;
-    private final TalonFX rightMotor;
-    
-    // Control objects
-    private final VoltageOut voltageControl = new VoltageOut(0);
-    
-    // Operational state
-    private boolean isIntaking = false;
-    private boolean isShooting = false;
+    // Define motor speed values
+    private static final double INTAKE_SPEED = 0.3;
+    private static final double SHOOTING_SPEED = 1;
 
-    public ShooterSubsystem() {
-        // Initialize motors
-        leftMotor = new TalonFX(17);
-        rightMotor = new TalonFX(18);
-        
-        // Configure motors
-        configureMotors();
-    }
+    // Maximum voltage available
+    private static final double MAX_VOLTAGE = 12.0;
+
+    // Create motor objects
+    private final TalonFX leftMotor = new TalonFX(LEFT_MOTOR_ID);
+    private final TalonFX rightMotor = new TalonFX(RIGHT_MOTOR_ID);
     
-    private void configureMotors() {
-        // Create and apply configuration for both motors
+    // Create duty cycle control object
+    private final DutyCycleOut speedControl = new DutyCycleOut(0);
+    
+    /**
+     * Constructor
+     */
+    public ShooterSubsystem() {
+        // Configure motors for maximum power output
         TalonFXConfiguration config = new TalonFXConfiguration();
         
-        // Set current limits to protect motors
-        config.CurrentLimits.SupplyCurrentLimit = 40; // 40 amps
+        // Current limits - increase to maximum safe values
+        config.CurrentLimits.SupplyCurrentLimit = 80; // Significantly higher than default
         config.CurrentLimits.SupplyCurrentLimitEnable = true;
+        config.CurrentLimits.StatorCurrentLimit = 150; // Very high to prevent stalling
+        config.CurrentLimits.StatorCurrentLimitEnable = true;
         
-        // Apply configurations
+        // Voltage configuration for maximum power
+        config.Voltage.PeakForwardVoltage = MAX_VOLTAGE;
+        config.Voltage.PeakReverseVoltage = -MAX_VOLTAGE;
+        config.Voltage.SupplyVoltageTimeConstant = 0.01; // Fast voltage compensation
+        
+        // Zero ramp-up time for instant maximum power
+        config.OpenLoopRamps.DutyCycleOpenLoopRampPeriod = 0.0;
+        
+        // Set to Coast mode when stopping to prevent sudden braking
+        config.MotorOutput.NeutralMode = NeutralModeValue.Coast;
+        
+        // Apply configuration to both motors
         leftMotor.getConfigurator().apply(config);
         rightMotor.getConfigurator().apply(config);
-        
-        // Set neutral mode (coast when not powered for less wear on gears)
-        leftMotor.setNeutralMode(NeutralModeValue.Coast);
-        rightMotor.setNeutralMode(NeutralModeValue.Coast);
     }
     
     /**
-     * Activate intake mode (left motor clockwise, right motor counterclockwise)
+     * Run the intake (motors run inward)
      */
-    public void activateIntake() {
-        // For TalonFX, positive is counterclockwise when looking at the shaft
-        // So we need to invert the directions based on motor orientation
-        leftMotor.setControl(voltageControl.withOutput(-INTAKE_SPEED * MAX_VOLTAGE));
-        rightMotor.setControl(voltageControl.withOutput(INTAKE_SPEED * MAX_VOLTAGE));
-        isIntaking = true;
-        isShooting = false;
+    public void intake() {
+        leftMotor.setControl(speedControl.withOutput(INTAKE_SPEED));
+        rightMotor.setControl(speedControl.withOutput(-INTAKE_SPEED));
     }
     
     /**
-     * Activate shooting mode (left motor counterclockwise, right motor clockwise)
+     * Run the shooter (motors run outward) with maximum available power
      */
-    public void activateShooting() {
-        leftMotor.setControl(voltageControl.withOutput(SHOOTING_SPEED * MAX_VOLTAGE));
-        rightMotor.setControl(voltageControl.withOutput(-SHOOTING_SPEED * MAX_VOLTAGE));
-        isIntaking = false;
-        isShooting = true;
+    public void shoot() {
+        // Use the same speed but with optimized power delivery
+        leftMotor.setControl(speedControl.withOutput(-SHOOTING_SPEED));
+        rightMotor.setControl(speedControl.withOutput(SHOOTING_SPEED));
     }
     
     /**
-     * Stop all motors
+     * Stop all shooter motors
      */
-    public void stopMotors() {
-        leftMotor.setControl(voltageControl.withOutput(0));
-        rightMotor.setControl(voltageControl.withOutput(0));
-        isIntaking = false;
-        isShooting = false;
-    }
-    
-    /**
-     * Create a command to control the shooter based on controller triggers
-     * @param operatorXbox The operator's CommandXboxController
-     * @return A command that controls the shooter based on trigger inputs
-     */
-    public Command createTriggerControlCommand(CommandXboxController operatorXbox) {
-        return run(() -> {
-            double leftTrigger = operatorXbox.getLeftTriggerAxis();
-            double rightTrigger = operatorXbox.getRightTriggerAxis();
-            
-            // Check right trigger first (shooting takes priority)
-            if (rightTrigger > TRIGGER_THRESHOLD) {
-                activateShooting();
-            } 
-            // Then check left trigger for intake
-            else if (leftTrigger > TRIGGER_THRESHOLD) {
-                activateIntake();
-            } 
-            // If neither trigger is pressed, stop motors
-            else {
-                stopMotors();
-            }
-        });
-    }
-    
-    @Override
-    public void periodic() {
-        // Update dashboard with shooter status
-        SmartDashboard.putBoolean("Shooter Intaking", isIntaking);
-        SmartDashboard.putBoolean("Shooter Shooting", isShooting);
-        SmartDashboard.putNumber("Left Motor Output", leftMotor.get());
-        SmartDashboard.putNumber("Right Motor Output", rightMotor.get());
+    public void stop() {
+        leftMotor.setControl(speedControl.withOutput(0));
+        rightMotor.setControl(speedControl.withOutput(0));
     }
 }

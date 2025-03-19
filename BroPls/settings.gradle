@@ -26,5 +26,18 @@ pluginManagement {
     }
 }
 
-Properties props = System.getProperties();
-props.setProperty("org.gradle.internal.native.headers.unresolved.dependencies.ignore", "true");
+// Set system properties for the build
+gradle.ext.disableImportCheck = true
+
+def props = new Properties()
+File propsFile = new File('gradle.properties')
+if (propsFile.exists()) {
+    propsFile.withInputStream { props.load(it) }
+}
+
+if (!props.containsKey('teamNumber')) {
+    props.setProperty('teamNumber', '10032')
+}
+
+// Configure the rest of the build
+System.getProperties().setProperty("org.gradle.internal.native.headers.unresolved.dependencies.ignore", "true")
