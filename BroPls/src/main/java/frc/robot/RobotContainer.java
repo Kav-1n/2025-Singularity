@@ -114,7 +114,7 @@ public class RobotContainer
     elevator.setDefaultCommand(
         Commands.run(() -> {
             double joystickValue = -operatorXbox.getLeftY();
-            elevator.setManualSpeed(joystickValue * 0.3);
+            elevator.setManualSpeed(joystickValue * 0.4); // Increased from 0.3 to 0.4 for more responsive manual control
         }, elevator)
     );
 
@@ -204,18 +204,47 @@ public class RobotContainer
       driverXbox.start().onTrue(Commands.none());
     }
     
-    // Coordinated preset position commands - pivot moves first, then elevator
-    // When button is released, elevator returns to zero first, then pivot
-    operatorXbox.a().whileTrue(createCoordinatedGroundIntakeCommand());
-    operatorXbox.b().whileTrue(createCoordinatedAlgae1Command());
-    operatorXbox.x().whileTrue(createCoordinatedAlgae2Command());
-    operatorXbox.y().whileTrue(createCoordinatedBargeCommand());
+    // Elevator presets mapped to ABXY buttons with corrected positions
+    operatorXbox.a().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** A PRESSED - ACTIVATING TROUGH PRESET ***")),
+        elevator.createTroughCommand()
+    ));
+    
+    operatorXbox.b().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** B PRESSED - ACTIVATING L4 PRESET ***")),
+        elevator.createL4Command()
+    ));
+    
+    operatorXbox.x().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** X PRESSED - ACTIVATING L2 PRESET ***")),
+        elevator.createL2Command()
+    ));
+    
+    operatorXbox.y().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** Y PRESSED - ACTIVATING L3 PRESET ***")),
+        elevator.createL3Command()
+    ));
 
-    // Keep the D-pad for individual elevator control (if desired)
-    operatorXbox.povUp().whileTrue(elevator.createAlgae1Command());
-    operatorXbox.povRight().whileTrue(elevator.createAlgae2Command());
-    operatorXbox.povLeft().whileTrue(elevator.createBargeCommand());
-    operatorXbox.povDown().onTrue(elevator.createMoveToZeroCommand());
+    // Map pivot presets to D-pad with debug prints
+    operatorXbox.povDown().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD DOWN - ACTIVATING PIVOT TROUGH PRESET ***")),
+        m_pivotSubsystem.createTroughCommand()
+    ));
+    
+    operatorXbox.povLeft().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD LEFT - ACTIVATING PIVOT L2/L3 PRESET ***")),
+        m_pivotSubsystem.createL2L3Command()
+    ));
+    
+    operatorXbox.povUp().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD UP - ACTIVATING PIVOT L2/L3 PRESET ***")),
+        m_pivotSubsystem.createL2L3Command()
+    ));
+    
+    operatorXbox.povRight().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD RIGHT - ACTIVATING PIVOT L4 PRESET ***")),
+        m_pivotSubsystem.createL4Command()
+    ));
 
     // Reset encoders and emergency stop
     operatorXbox.leftBumper().onTrue(m_pivotSubsystem.createResetEncoderCommand());
@@ -253,6 +282,19 @@ public class RobotContainer
         elevator.stopAndHold(); // This will stop the elevator and hold position
         m_pivotSubsystem.stopMovement(); // Stop the pivot subsystem
         shooterSubsystem.stop(); // Stop the shooter
+    }));
+    
+    // Driver slow mode - left trigger reduces max speed to 1 foot per second
+    Trigger driverLeftTrigger = new Trigger(() -> driverXbox.getLeftTriggerAxis() > 0.1);
+    driverLeftTrigger.onTrue(Commands.runOnce(() -> {
+        System.out.println("SLOW MODE ACTIVATED - 1ft/s");
+        // Use the scaleTranslation method to reduce speed to roughly 1ft/s
+        driveAngularVelocity.scaleTranslation(0.1);  // Reduce to 10% of normal speed
+    }));
+    driverLeftTrigger.onFalse(Commands.runOnce(() -> {
+        System.out.println("SLOW MODE DEACTIVATED - returning to normal speed");
+        // Restore to 80% speed (the default we set earlier)
+        driveAngularVelocity.scaleTranslation(0.8);
     }));
   }
   
