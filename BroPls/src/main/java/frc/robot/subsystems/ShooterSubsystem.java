@@ -47,8 +47,8 @@ public class ShooterSubsystem extends SubsystemBase {
         // Zero ramp-up time for instant maximum power
         config.OpenLoopRamps.DutyCycleOpenLoopRampPeriod = 0.0;
         
-        // Set to Brake mode when stopping to prevent sudden braking
-        config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
+        // Set to Coast mode when stopping to prevent sudden braking
+        config.MotorOutput.NeutralMode = NeutralModeValue.Coast;
         
         // Apply configuration to both motors
         leftMotor.getConfigurator().apply(config);

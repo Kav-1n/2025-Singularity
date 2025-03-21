@@ -24,10 +24,10 @@ public class PivotSubsystem extends SubsystemBase {
 
     // Position constants
     private static final double ZERO_POSITION = 0.0;
-    private static final double GROUND_INTAKE_POSITION = 3.0; // Keeping this one
-    private static final double TROUGH_POSITION = 22.0; // New position
-    private static final double L2L3_POSITION = 25.0; // New position
-    private static final double L4_POSITION = 28.5; // New position
+    private static final double GROUND_INTAKE_POSITION = 3.0; // Placeholder angle
+    private static final double ALGAE1_POSITION = 0.5; // Placeholder angle
+    private static final double ALGAE2_POSITION = 0.7; // Placeholder angle
+    private static final double BARGE_SHOOT_POSITION = 0.9; // Placeholder angle
     
     private double m_goalAngle = 0.0; // Start at zero position instead of preset
     private boolean isMovementEnabled = false;
@@ -50,8 +50,8 @@ public class PivotSubsystem extends SubsystemBase {
         // Movement constraints - SLOWER FOR SMOOTHER OPERATION
         TrapezoidProfile.Constraints m_constraints = new TrapezoidProfile.Constraints(5, 0.5); // Reduced velocity and acceleration
         
-        // Main controller for movement to target - INCREASED PID VALUES FOR MORE POWER
-        m_controller = new ProfiledPIDController(0.1, 0.03, 0.08, m_constraints);
+        // Main controller for movement to target - GENTLER PID VALUES
+        m_controller = new ProfiledPIDController(0.03, 0.01, 0.05, m_constraints);
         m_controller.reset(m_encoder.getPosition());
         
         // Holding controller with even gentler values
@@ -189,8 +189,8 @@ public class PivotSubsystem extends SubsystemBase {
             double currentPosition = m_encoder.getPosition();
             double speed = m_controller.calculate(currentPosition);
        
-            // Limit speed to prevent high-torque issues - INCREASED FOR MORE POWER
-            speed = Math.max(-0.6, Math.min(0.6, speed)); // Increased from 0.3
+            // Limit speed to prevent high-torque issues - REDUCED FOR SMOOTHER OPERATION
+            speed = Math.max(-0.3, Math.min(0.3, speed)); // Reduced from 0.5
        
             // Apply speed to motor
             pivotMotor.set(speed);
@@ -223,16 +223,16 @@ public class PivotSubsystem extends SubsystemBase {
         setGoalAngle(GROUND_INTAKE_POSITION);
     }
 
-    public void goToTrough() {
-        setGoalAngle(TROUGH_POSITION);
+    public void goToAlgae1() {
+        setGoalAngle(ALGAE1_POSITION);
     }
 
-    public void goToL2L3() {
-        setGoalAngle(L2L3_POSITION);
+    public void goToAlgae2() {
+        setGoalAngle(ALGAE2_POSITION);
     }
 
-    public void goToL4() {
-        setGoalAngle(L4_POSITION);
+    public void goToBargeShoot() {
+        setGoalAngle(BARGE_SHOOT_POSITION);
     }
     
     /**
@@ -272,10 +272,10 @@ public class PivotSubsystem extends SubsystemBase {
     }
     
     /**
-     * Creates a command to move to a preset position and stay there,
-     * even after the button is released.
+     * Creates a command to move to a preset position and stay there while button is held,
+     * then return to zero when button is released.
      * @param targetPosition The target position to move to
-     * @return Command for preset movement that maintains position after release
+     * @return Command for preset movement with return to zero
      */
     private Command createPresetPositionCommand(double targetPosition) {
         return Commands.sequence(
@@ -283,73 +283,45 @@ public class PivotSubsystem extends SubsystemBase {
             Commands.runOnce(() -> {
                 System.out.println("Moving pivot to position: " + targetPosition);
                 setGoalAngle(targetPosition);
-                isMovementEnabled = true;
-                holdPosition = false;
-                
-                // Reset the controller for a fresh start
-                m_controller.reset(m_encoder.getPosition());
-                m_controller.setGoal(targetPosition);
             }),
-            
-            // Apply higher power initially to overcome inertia
-            Commands.runOnce(() -> {
-                // Get direction to target
-                double currentPosition = m_encoder.getPosition();
-                double direction = Math.signum(targetPosition - currentPosition);
-                
-                // Apply a strong initial pulse to overcome any static friction
-                pivotMotor.set(direction * 0.5);
-            }),
-            
-            // Brief delay to let the initial pulse take effect
-            Commands.waitSeconds(0.1),
-            
             // Run until we reach the target
             Commands.run(() -> {
-                // Run automatic movement via the periodic method
-                isMovementEnabled = true;
-                holdPosition = false;
-                
-                // Periodically log progress for debugging
-                if (Math.random() < 0.05) { // Log about 5% of the time
-                    double currentPosition = m_encoder.getPosition();
-                    System.out.println("Pivot moving... current: " + currentPosition + ", target: " + targetPosition);
-                }
+                // The periodic method handles the actual movement
             })
-            .until(() -> isPivotAtGoal()),
-            
+            .until(this::isPivotAtGoal),
             // Hold at the target position
             Commands.runOnce(() -> {
-                System.out.println("Pivot at target, holding position at: " + m_encoder.getPosition());
+                System.out.println("Pivot at target, holding position");
                 holdPosition = true;
                 isMovementEnabled = false;
                 m_holdController.setGoal(targetPosition);
-                m_goalAngle = targetPosition;
             }),
-            
             // Wait indefinitely until button is released
             Commands.waitUntil(() -> false)
         ).finallyDo((interrupted) -> {
             // When button is released or command interrupted
-            System.out.println("Button released, maintaining current position");
+            System.out.println("Button released, returning pivot to zero");
             
-            // Get current position to hold
-            double currentPosition = m_encoder.getPosition();
-            
-            // Create and schedule a command to hold at current position
-            Commands.runOnce(() -> {
-                // Stay at current position
-                holdPosition = true;
-                isMovementEnabled = false;
-                m_goalAngle = currentPosition;
-                m_holdController.reset(currentPosition);
-                m_holdController.setGoal(currentPosition);
-            }).schedule();
+            // Create and schedule a return to zero command
+            Commands.sequence(
+                Commands.runOnce(this::moveToZero),
+                Commands.run(() -> {
+                    // The periodic method handles the actual movement
+                })
+                .until(() -> Math.abs(m_encoder.getPosition()) < 0.2),
+                Commands.runOnce(() -> {
+                    // Hold at zero
+                    holdPosition = true;
+                    isMovementEnabled = false;
+                    m_goalAngle = ZERO_POSITION;
+                    m_holdController.setGoal(ZERO_POSITION);
+                })
+            ).schedule();
         });
     }
 
     /**
-     * Creates a command that moves to zero position
+     * Creates a command to move to zero position
      */
     public Command createMoveToZeroCommand() {
         return Commands.sequence(
@@ -371,20 +343,20 @@ public class PivotSubsystem extends SubsystemBase {
         );
     }
     
-    // Command methods for the new presets
+    // New command methods using the hold-and-return pattern
     public Command createGroundIntakeCommand() {
         return createPresetPositionCommand(GROUND_INTAKE_POSITION);
     }
    
-    public Command createTroughCommand() {
-        return createPresetPositionCommand(TROUGH_POSITION);
+    public Command createAlgae1Command() {
+        return createPresetPositionCommand(ALGAE1_POSITION);
     }
    
-    public Command createL2L3Command() {
-        return createPresetPositionCommand(L2L3_POSITION);
+    public Command createAlgae2Command() {
+        return createPresetPositionCommand(ALGAE2_POSITION);
     }
    
-    public Command createL4Command() {
-        return createPresetPositionCommand(L4_POSITION);
+    public Command createBargeShootCommand() {
+        return createPresetPositionCommand(BARGE_SHOOT_POSITION);
     }
 }

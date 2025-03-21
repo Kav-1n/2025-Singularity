@@ -32,7 +32,7 @@ import java.io.File;
 public class RobotContainer {
   public final CommandXboxController driverXbox = new CommandXboxController(0);
   public final CommandXboxController operatorXbox = new CommandXboxController(1);
-  public final CommandXboxController limelightXbox = new CommandXboxController(2);
+  // public final CommandXboxController limelightXbox = new CommandXboxController(2);
 
   private final PivotSubsystem m_pivotSubsystem = new PivotSubsystem();
   private final Elevator elevator = new Elevator();
@@ -83,6 +83,13 @@ public class RobotContainer {
       double joystickValue = -operatorXbox.getLeftY();
       elevator.setManualSpeed(joystickValue * 0.4);
     }, elevator));
+    // Set up elevator manual control with left joystick
+    elevator.setDefaultCommand(
+        Commands.run(() -> {
+            double joystickValue = -operatorXbox.getLeftY();
+            elevator.setManualSpeed(joystickValue * 0.3);
+        }, elevator)
+    );
 
     m_pivotSubsystem.setDefaultCommand(Commands.run(() -> {
       double joystickValue = operatorXbox.getRightY();
@@ -164,35 +171,21 @@ public class RobotContainer {
       driverXbox.a().onTrue(Commands.runOnce(drivebase::zeroGyro));
       driverXbox.x().onTrue(Commands.runOnce(drivebase::addFakeVisionReading));
       driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
+      driverXbox.start().onTrue(Commands.none());
     }
+    
+    // Coordinated preset position commands - pivot moves first, then elevator
+    // When button is released, elevator returns to zero first, then pivot
+    operatorXbox.a().whileTrue(createCoordinatedGroundIntakeCommand());
+    operatorXbox.b().whileTrue(createCoordinatedAlgae1Command());
+    operatorXbox.x().whileTrue(createCoordinatedAlgae2Command());
+    operatorXbox.y().whileTrue(createCoordinatedBargeCommand());
 
-    // Elevator presets
-    operatorXbox.a().whileTrue(Commands.sequence(
-        Commands.print("*** A PRESSED - ACTIVATING TROUGH PRESET ***"),
-        elevator.createTroughCommand()));
-    operatorXbox.b().whileTrue(Commands.sequence(
-        Commands.print("*** B PRESSED - ACTIVATING L4 PRESET ***"),
-        elevator.createL4Command()));
-    operatorXbox.x().whileTrue(Commands.sequence(
-        Commands.print("*** X PRESSED - ACTIVATING L2 PRESET ***"),
-        elevator.createL2Command()));
-    operatorXbox.y().whileTrue(Commands.sequence(
-        Commands.print("*** Y PRESSED - ACTIVATING L3 PRESET ***"),
-        elevator.createL3Command()));
-
-    // Pivot presets
-    operatorXbox.povDown().whileTrue(Commands.sequence(
-        Commands.print("*** D-PAD DOWN - ACTIVATING PIVOT TROUGH PRESET ***"),
-        m_pivotSubsystem.createTroughCommand()));
-    operatorXbox.povLeft().whileTrue(Commands.sequence(
-        Commands.print("*** D-PAD LEFT - ACTIVATING PIVOT L2/L3 PRESET ***"),
-        m_pivotSubsystem.createL2L3Command()));
-    operatorXbox.povUp().whileTrue(Commands.sequence(
-        Commands.print("*** D-PAD UP - ACTIVATING PIVOT L2/L3 PRESET ***"),
-        m_pivotSubsystem.createL2L3Command()));
-    operatorXbox.povRight().whileTrue(Commands.sequence(
-        Commands.print("*** D-PAD RIGHT - ACTIVATING PIVOT L4 PRESET ***"),
-        m_pivotSubsystem.createL4Command()));
+    // Keep the D-pad for individual elevator control (if desired)
+    operatorXbox.povUp().whileTrue(elevator.createAlgae1Command());
+    operatorXbox.povRight().whileTrue(elevator.createAlgae2Command());
+    operatorXbox.povLeft().whileTrue(elevator.createBargeCommand());
+    operatorXbox.povDown().onTrue(elevator.createMoveToZeroCommand());
 
     operatorXbox.leftBumper().onTrue(m_pivotSubsystem.createResetEncoderCommand());
     operatorXbox.rightBumper().onTrue(elevator.createZeroEncoderCommand());
