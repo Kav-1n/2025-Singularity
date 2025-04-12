@@ -17,28 +17,32 @@ public class Elevator extends SubsystemBase {
     private static final double GROUND_POSITION = 0.0;
     private static final double ALGAE1_POSITION = 19.0;
     private static final double ALGAE2_POSITION = 27.0;
-    private static final double BARGE_POSITION = 32.0;
+    private static final double BARGE_POSITION = 33.0;
+    // New preset positions
+    private static final double TROUGH_POSITION = 24.0;
+    private static final double L2_POSITION = 24.0;
+    private static final double L3_POSITION = 33.0;
+    private static final double L4_POSITION = 33.0;
     
-    // Constants for slow movement speeds
-    private static final double SLOW_UP_SPEED = 0.12;    // Slow upward speed
-    private static final double SLOW_DOWN_SPEED = -0.06; // Slower downward speed for safety
+    // Constants for movement speeds (significantly increased)
+    private static final double SLOW_UP_SPEED = 0.30;    // Increased upward speed
+    private static final double SLOW_DOWN_SPEED = -0.15; // Increased downward speed (still conservative for safety)
     
     // Motor control constants
     private static final double JOYSTICK_DEADBAND = 0.1;
     
-    // Position hold PID values
-    private static final double POSITION_HOLD_KP = 6;
-    private static final double POSITION_HOLD_KI = 0.5;
-    private static final double POSITION_HOLD_KD = 0.5;
-    private static final double POSITION_HOLD_KS = 0.5;   // Static friction compensation
-    private static final double POSITION_HOLD_KV = 0.1;  // Velocity feedforward
-    
+    // Position hold PID values (increased for better response with higher speeds)
+    private static final double POSITION_HOLD_KP = 10;
+    private static final double POSITION_HOLD_KI = 1.5;
+    private static final double POSITION_HOLD_KD = 2.0;
+    private static final double POSITION_HOLD_KS = 0.7;   // Static friction compensation
+    private static final double POSITION_HOLD_KV = 0.2;  // Velocity feedforward
     
     // Maximum voltage output
     private static final double MAX_VOLTAGE = 15.0;
     
     // Speed reduction factor for manual control
-    private static final double MANUAL_SPEED_FACTOR = 0.6; // 30% of full speed
+    private static final double MANUAL_SPEED_FACTOR = 0.8; // Increased to 80% of full speed
     
     // Hardware
     private final TalonFX leaderMotor;
@@ -76,8 +80,8 @@ public class Elevator extends SubsystemBase {
         config.Slot0 = slot0;
         
         // Set smoothing ramp rates
-        config.ClosedLoopRamps.VoltageClosedLoopRampPeriod = 0.8; // 800ms ramp
-        config.OpenLoopRamps.DutyCycleOpenLoopRampPeriod = 0.4;   // 400ms ramp
+        config.ClosedLoopRamps.VoltageClosedLoopRampPeriod = 0.5; // Reduced from 800ms to 500ms for faster response
+        config.OpenLoopRamps.DutyCycleOpenLoopRampPeriod = 0.3;   // Reduced from 400ms to 300ms for faster response
         
         // Set current limits for safety
         config.CurrentLimits.SupplyCurrentLimit = 60;
@@ -108,8 +112,9 @@ public class Elevator extends SubsystemBase {
         normalVoltageConfig.PeakForwardVoltage = MAX_VOLTAGE;
         normalVoltageConfig.PeakReverseVoltage = -MAX_VOLTAGE;
         
-        lowVoltageConfig.PeakForwardVoltage = 5.0;  // Limited voltage for slow movements
-        lowVoltageConfig.PeakReverseVoltage = -5.0;
+        // Increased voltage for faster movements while maintaining safety
+        lowVoltageConfig.PeakForwardVoltage = 8.0;  // Increased from 5.0V to 8.0V
+        lowVoltageConfig.PeakReverseVoltage = -8.0; // Increased from -5.0V to -8.0V
     }
     
     /**
@@ -127,9 +132,9 @@ public class Elevator extends SubsystemBase {
         // Set the target position
         currentTargetPosition = position;
         
-        // Use position control to move to the specified position
+        // Use position control to move to the specified position with increased feedforward
         leaderMotor.setControl(positionControl.withPosition(position)
-                                            .withFeedForward(0.05));
+                                            .withFeedForward(0.08)); // Increased from 0.05 to 0.08
         
         System.out.println("Elevator moving to position: " + position);
     }
@@ -151,7 +156,7 @@ public class Elevator extends SubsystemBase {
             // Apply position control to hold at current position
             if (isHoldingPosition) {
                 leaderMotor.setControl(positionControl.withPosition(currentTargetPosition)
-                                                    .withFeedForward(0.05));
+                                                    .withFeedForward(0.08)); // Increased from 0.05 to 0.08
             }
         } else {
             // Joystick is active - use duty cycle control
@@ -169,7 +174,7 @@ public class Elevator extends SubsystemBase {
             
             if (scaledSpeed > 0) {
                 // Moving up - add extra power to overcome gravity
-                outputPower = scaledSpeed + 0.10; // Add 10% power for gravity compensation
+                outputPower = scaledSpeed + 0.15; // Increased from 0.10 to 0.15 for more compensation
                 
                 // Limit to maximum of the speed factor to maintain control
                 outputPower = Math.min(outputPower, MANUAL_SPEED_FACTOR);
@@ -206,7 +211,7 @@ public class Elevator extends SubsystemBase {
         // Set a slow, constant upward speed
         leaderMotor.setControl(dutyCycleControl.withOutput(SLOW_UP_SPEED));
         
-        System.out.println("Elevator moving up slowly...");
+        System.out.println("Elevator moving up at speed: " + SLOW_UP_SPEED);
     }
     
     /**
@@ -222,7 +227,7 @@ public class Elevator extends SubsystemBase {
         // Set a slow, constant downward speed
         leaderMotor.setControl(dutyCycleControl.withOutput(SLOW_DOWN_SPEED));
         
-        System.out.println("Elevator moving down slowly...");
+        System.out.println("Elevator moving down at speed: " + SLOW_DOWN_SPEED);
     }
     
     /**
@@ -236,7 +241,7 @@ public class Elevator extends SubsystemBase {
         
         // Apply position control to hold at current position
         leaderMotor.setControl(positionControl.withPosition(currentTargetPosition)
-                                            .withFeedForward(0.05));
+                                            .withFeedForward(0.08)); // Increased from 0.05 to 0.08
         
         System.out.println("Elevator stopped and holding at position: " + currentTargetPosition);
     }
@@ -253,53 +258,79 @@ public class Elevator extends SubsystemBase {
     }
 
     /**
-     * Creates a command to move to a preset height and then return to zero when released
+     * Creates a command to move to a preset height and stay there even after button release
      * @param targetHeight The preset height to stop at
-     * @return Command for moving to preset height and back to zero
+     * @return Command for moving to preset height and staying there
      */
     public Command createPresetHeightCommand(double targetHeight) {
         return Commands.sequence(
-            // First apply low voltage config
+            // First apply low voltage config and ensure we can move
             Commands.runOnce(() -> {
-                System.out.println("Moving to preset height: " + targetHeight);
+                System.out.println("Starting move to preset height: " + targetHeight);
+                isHoldingPosition = false;
+                isManualControlActive = false;
                 leaderMotor.getConfigurator().apply(lowVoltageConfig);
+                
+                // Apply an initial pulse to overcome static friction
+                double direction = Math.signum(targetHeight - getCurrentPosition());
+                if (direction != 0) {
+                    leaderMotor.setControl(dutyCycleControl.withOutput(direction * 0.3));
+                }
             }),
-            // Brief delay for config to apply
-            Commands.waitSeconds(0.05),
-            // Move up until target height
-            Commands.run(
-                this::moveSlowUp,
-                this
-            ).until(() -> getCurrentPosition() >= targetHeight),
+            
+            // Brief delay for config and pulse to apply
+            Commands.waitSeconds(0.1),
+            
+            // Move until target height
+            Commands.run(() -> {
+                double currentPosition = getCurrentPosition();
+                
+                // Log position progress for debugging (approximately every 0.5 seconds)
+                if (Math.random() < 0.02) { 
+                    System.out.println("Elevator moving... Current: " + currentPosition + ", Target: " + targetHeight);
+                }
+                
+                if (currentPosition < targetHeight) {
+                    moveSlowUp();
+                } else if (currentPosition > targetHeight + 0.5) {
+                    moveSlowDown();
+                } else {
+                    // Close enough, switch to position control
+                    setPosition(targetHeight);
+                }
+            }, this)
+            .until(() -> Math.abs(getCurrentPosition() - targetHeight) < 0.5),
+            
             // Stop and hold when target reached
             Commands.runOnce(() -> {
+                System.out.println("Elevator reached target, holding at: " + targetHeight);
                 // Explicitly set the position and hold it
                 setPosition(targetHeight);
                 isHoldingPosition = true;
                 isManualControlActive = false;
             }, this),
+            
             // Wait while position is held - more explicit holding
             Commands.run(() -> {
                 // Continuously set the position to ensure it stays in place
                 leaderMotor.setControl(positionControl
                     .withPosition(targetHeight)
-                    .withFeedForward(0.05)
+                    .withFeedForward(0.08) // Increased from 0.05 to 0.08
                 );
             }, this)
         ).finallyDo((interrupted) -> {
-            // When button is released or command interrupted
-            System.out.println("Button released, returning to zero");
+            // When button is released or command interrupted, maintain current position
+            System.out.println("Button released, maintaining position at: " + getCurrentPosition());
             
-            // Create and schedule a return to zero command
-            Commands.sequence(
-                Commands.runOnce(() -> leaderMotor.getConfigurator().apply(lowVoltageConfig)),
-                Commands.waitSeconds(0.05),
-                Commands.run(
-                    this::moveSlowDown,
-                    this
-                ).until(() -> Math.abs(getCurrentPosition()) < 0.5),
-                Commands.runOnce(this::stopAndHold, this)
-            ).schedule();
+            // Get current position
+            double currentPos = getCurrentPosition();
+            
+            // Create and schedule a command to hold at current position
+            Commands.runOnce(() -> {
+                setPosition(currentPos);
+                isHoldingPosition = true;
+                isManualControlActive = false;
+            }, this).schedule();
         });
     }
     
@@ -352,13 +383,41 @@ public class Elevator extends SubsystemBase {
         return createPresetHeightCommand(BARGE_POSITION);
     }
     
+    /**
+     * Creates command for Trough position
+     */
+    public Command createTroughCommand() {
+        return createPresetHeightCommand(TROUGH_POSITION);
+    }
+    
+    /**
+     * Creates command for L2 position
+     */
+    public Command createL2Command() {
+        return createPresetHeightCommand(L2_POSITION);
+    }
+    
+    /**
+     * Creates command for L3 position
+     */
+    public Command createL3Command() {
+        return createPresetHeightCommand(L3_POSITION);
+    }
+    
+    /**
+     * Creates command for L4 position
+     */
+    public Command createL4Command() {
+        return createPresetHeightCommand(L4_POSITION);
+    }
+    
     @Override
     public void periodic() {
         // If we're supposed to be holding position but not in manual control,
         // ensure we're still holding that position
         if (isHoldingPosition && !isManualControlActive) {
             leaderMotor.setControl(positionControl.withPosition(currentTargetPosition)
-                                                .withFeedForward(0.05));
+                                                .withFeedForward(0.08)); // Increased from 0.05 to 0.08
         }
     }
 }

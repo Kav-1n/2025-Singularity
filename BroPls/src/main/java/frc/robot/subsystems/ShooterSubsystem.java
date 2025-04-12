@@ -13,11 +13,11 @@ public class ShooterSubsystem extends SubsystemBase {
     private static final int RIGHT_MOTOR_ID = 18;
     
     // Define motor speed values
-    private static final double INTAKE_SPEED = 0.3;
-    private static final double SHOOTING_SPEED = 1;
+    private static final double INTAKE_SPEED = 1;
+    private static final double SHOOTING_SPEED = 0.3;
 
     // Maximum voltage available
-    private static final double MAX_VOLTAGE = 12.0;
+    private static final double MAX_VOLTAGE = 16.0;
 
     // Create motor objects
     private final TalonFX leftMotor = new TalonFX(LEFT_MOTOR_ID);
@@ -47,8 +47,8 @@ public class ShooterSubsystem extends SubsystemBase {
         // Zero ramp-up time for instant maximum power
         config.OpenLoopRamps.DutyCycleOpenLoopRampPeriod = 0.0;
         
-        // Set to Coast mode when stopping to prevent sudden braking
-        config.MotorOutput.NeutralMode = NeutralModeValue.Coast;
+        // Set to Brake mode when stopping to prevent sudden braking
+        config.MotorOutput.NeutralMode = NeutralModeValue.Brake;
         
         // Apply configuration to both motors
         leftMotor.getConfigurator().apply(config);
