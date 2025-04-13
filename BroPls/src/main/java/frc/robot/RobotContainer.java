@@ -20,14 +20,15 @@ import edu.wpi.first.wpilibj2.command.WaitCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.OperatorConstants;
+import frc.robot.commands.AlignToReefTagRelative;
 import frc.robot.subsystems.SwerveSubsystem;
 import java.io.File;
 import swervelib.SwerveInputStream;
 import frc.robot.subsystems.PivotSubsystem;
-import edu.wpi.first.wpilibj2.command.Commands;
 import frc.robot.subsystems.Elevator;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.button.POVButton;
+import frc.robot.subsystems.ShooterSubsystem;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a "declarative" paradigm, very
@@ -41,8 +42,9 @@ public class RobotContainer
   public final CommandXboxController driverXbox = new CommandXboxController(0);
   public final CommandXboxController operatorXbox = new CommandXboxController(1);
 
-  private final PivotSubsystem pivotSubsystem = new PivotSubsystem();
+  private final PivotSubsystem m_pivotSubsystem = new PivotSubsystem();
   private final Elevator elevator = new Elevator();
+  private final ShooterSubsystem shooterSubsystem = new ShooterSubsystem();
 
   // The robot's subsystems and commands are defined here...
   private final SwerveSubsystem       drivebase  = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(),
@@ -109,6 +111,24 @@ public class RobotContainer
     // Configure the trigger bindings
     configureBindings();
 
+    // Set up elevator manual control with left joystick
+    elevator.setDefaultCommand(
+        Commands.run(() -> {
+            double joystickValue = -operatorXbox.getLeftY();
+            elevator.setManualSpeed(joystickValue * 0.4); // Increased from 0.3 to 0.4 for more responsive manual control
+        }, elevator)
+    );
+
+    // Set up pivot manual control with right joystick
+    m_pivotSubsystem.setDefaultCommand(
+        Commands.run(() -> {
+            double joystickValue = operatorXbox.getRightY();
+            m_pivotSubsystem.manualControl(joystickValue);
+        }, m_pivotSubsystem)
+    );
+    // Reef alignment
+		driverXbox.povRight().onTrue(new AlignToReefTagRelative(true, drivebase).withTimeout(3));
+		driverXbox.povLeft().onTrue(new AlignToReefTagRelative(false, drivebase).withTimeout(3));
 
     DriverStation.silenceJoystickConnectionWarning(true);
     NamedCommands.registerCommand("test", Commands.print("I EXIST"));
@@ -187,14 +207,211 @@ public class RobotContainer
       driverXbox.leftBumper().whileTrue(Commands.runOnce(drivebase::lock, drivebase).repeatedly());
       driverXbox.start().onTrue(Commands.none());
     }
-
-    // // **NEW: Map PivotSubsystem commands to Xbox controller buttons**
-    // operatorXbox.a().onTrue(pivotSubsystem.moveToGroundIntake());
-    // operatorXbox.b().onTrue(pivotSubsystem.moveToAlgae1());
-    // operatorXbox.x().onTrue(pivotSubsystem.moveToAlgae2());
-    // operatorXbox.y().onTrue(pivotSubsystem.moveToAlgae3());
-
     
+    // Elevator presets mapped to ABXY buttons with corrected positions
+    operatorXbox.a().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** A PRESSED - ACTIVATING TROUGH PRESET ***")),
+        elevator.createTroughCommand()
+    ));
+    
+    operatorXbox.b().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** B PRESSED - ACTIVATING L4 PRESET ***")),
+        elevator.createL4Command()
+    ));
+    
+    operatorXbox.x().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** X PRESSED - ACTIVATING L2 PRESET ***")),
+        elevator.createL2Command()
+    ));
+    
+    operatorXbox.y().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** Y PRESSED - ACTIVATING L3 PRESET ***")),
+        elevator.createL3Command()
+    ));
+
+    // Map pivot presets to D-pad with debug prints
+    operatorXbox.povDown().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD DOWN - ACTIVATING PIVOT TROUGH PRESET ***")),
+        m_pivotSubsystem.createTroughCommand()
+    ));
+    
+    operatorXbox.povLeft().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD LEFT - ACTIVATING PIVOT L2/L3 PRESET ***")),
+        m_pivotSubsystem.createL2L3Command()
+    ));
+    
+    operatorXbox.povUp().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD UP - ACTIVATING PIVOT L2/L3 PRESET ***")),
+        m_pivotSubsystem.createL2L3Command()
+    ));
+    
+    operatorXbox.povRight().whileTrue(Commands.sequence(
+        Commands.runOnce(() -> System.out.println("*** D-PAD RIGHT - ACTIVATING PIVOT L4 PRESET ***")),
+        m_pivotSubsystem.createL4Command()
+    ));
+
+    // Reset encoders and emergency stop
+    operatorXbox.leftBumper().onTrue(m_pivotSubsystem.createResetEncoderCommand());
+    operatorXbox.rightBumper().onTrue(elevator.createZeroEncoderCommand());
+
+    // Shooter subsystem commands - left trigger for intake, right trigger for shooting
+    Trigger operatorLeftTrigger = new Trigger(() -> operatorXbox.getLeftTriggerAxis() > 0.1);
+    Trigger operatorRightTrigger = new Trigger(() -> operatorXbox.getRightTriggerAxis() > 0.1);
+    
+    operatorLeftTrigger.whileTrue(
+        Commands.runEnd(
+            // While active, run intake
+            () -> shooterSubsystem.intake(),
+            // When finished, stop motors
+            () -> shooterSubsystem.stop(),
+            shooterSubsystem
+        )
+    );
+    
+    operatorRightTrigger.whileTrue(
+        Commands.runEnd(
+            // While active, run shooter
+            () -> shooterSubsystem.shoot(),
+            // When finished, stop motors
+            () -> shooterSubsystem.stop(),
+            shooterSubsystem
+        )
+    );
+
+    // Emergency stop button combination (press both bumpers together)
+    Trigger bothBumpers = operatorXbox.rightBumper().and(operatorXbox.leftBumper());
+    bothBumpers.onTrue(Commands.runOnce(() -> {
+        // Emergency stop function
+        System.out.println("EMERGENCY STOP ACTIVATED");
+        elevator.stopAndHold(); // This will stop the elevator and hold position
+        m_pivotSubsystem.stopMovement(); // Stop the pivot subsystem
+        shooterSubsystem.stop(); // Stop the shooter
+    }));
+    
+    // Driver slow mode - left trigger reduces max speed to 1 foot per second
+    Trigger driverLeftTrigger = new Trigger(() -> driverXbox.getLeftTriggerAxis() > 0.1);
+    driverLeftTrigger.onTrue(Commands.runOnce(() -> {
+        System.out.println("SLOW MODE ACTIVATED - 1ft/s");
+        // Use the scaleTranslation method to reduce speed to roughly 1ft/s
+        driveAngularVelocity.scaleTranslation(0.1);  // Reduce to 10% of normal speed
+    }));
+    driverLeftTrigger.onFalse(Commands.runOnce(() -> {
+        System.out.println("SLOW MODE DEACTIVATED - returning to normal speed");
+        // Restore to 80% speed (the default we set earlier)
+        driveAngularVelocity.scaleTranslation(0.8);
+    }));
+  }
+  
+  /**
+   * Creates a fixed command sequence that coordinates pivot and elevator movement
+   * with improved reliability and no oscillation.
+   * 
+   * @param pivotPosition The pivot position to move to
+   * @param elevatorPosition The elevator position to move to
+   * @return A coordinated command sequence
+   */
+  private Command createCoordinatedMovementCommand(double pivotPosition, double elevatorPosition) {
+    return Commands.sequence(
+        // First move pivot to desired position - use direct command instead of the command factory
+        Commands.runOnce(() -> {
+            System.out.println("Starting coordinated movement - Moving pivot to: " + pivotPosition);
+            m_pivotSubsystem.setGoalAngle(pivotPosition);
+        }, m_pivotSubsystem),
+        
+        // Wait until pivot reaches position or timeout
+        Commands.run(() -> {
+            // The pivot's periodic method handles the actual movement
+        }, m_pivotSubsystem)
+        .until(() -> m_pivotSubsystem.isPivotAtGoal())
+        .withTimeout(3), // Timeout for safety
+        
+        // Once pivot is at position, start the elevator
+        Commands.runOnce(() -> {
+            System.out.println("Pivot positioned, now moving elevator to: " + elevatorPosition);
+            // Direct command to elevator to move to position
+        }),
+        
+        // Now run the elevator's command (not as a sequence member, but as a parallel command)
+        Commands.parallel(
+            // Hold the pivot in position
+            Commands.run(() -> {
+                // Pivot will hold position thanks to its periodic method
+            }, m_pivotSubsystem),
+            
+            // Run the elevator to position
+            elevator.createPresetHeightCommand(elevatorPosition)
+        ),
+        
+        // The elevator command contains the waitUntil(false) that keeps everything active
+        // until the button is released, and its finallyDo handles returning to zero
+        
+        // Wait indefinitely until button is released
+        Commands.waitUntil(() -> false)
+    ).finallyDo((interrupted) -> {
+        // When button is released, reverse the sequence
+        System.out.println("Button released, returning to zero in sequence");
+        
+        // Create and schedule the return sequence
+        Commands.sequence(
+            // First move elevator down to zero
+            Commands.runOnce(() -> {
+                System.out.println("Moving elevator to zero");
+                elevator.setPosition(0); // Direct command to move to zero
+            }, elevator),
+            
+            // Wait until elevator is near zero
+            Commands.run(() -> {})
+            .until(() -> Math.abs(elevator.getCurrentPosition()) < 0.5)
+            .withTimeout(3), // Safety timeout
+            
+            // Then move pivot back to zero
+            Commands.runOnce(() -> {
+                System.out.println("Moving pivot to zero");
+                m_pivotSubsystem.setGoalAngle(0);
+            }, m_pivotSubsystem)
+        ).schedule();
+    });
+  }
+
+
+  /**
+   * Creates the Ground Intake coordinated position command
+   */
+  private Command createCoordinatedGroundIntakeCommand() {
+    return createCoordinatedMovementCommand(
+        3.0, // Ground intake pivot position
+        12.0 // Algae1 elevator position
+    );
+  }
+
+  /**
+   * Creates the Algae1 coordinated position command
+   */
+  private Command createCoordinatedAlgae1Command() {
+    return createCoordinatedMovementCommand(
+        0.5, // Algae1 pivot position
+        12.0 // Algae1 elevator position
+    );
+  }
+
+  /**
+   * Creates the Algae2 coordinated position command
+   */
+  private Command createCoordinatedAlgae2Command() {
+    return createCoordinatedMovementCommand(
+        0.7, // Algae2 pivot position
+        22.0 // Algae2 elevator position
+    );
+  }
+
+  /**
+   * Creates the Barge Shoot coordinated position command
+   */
+  private Command createCoordinatedBargeCommand() {
+    return createCoordinatedMovementCommand(
+        0.9, // Barge pivot position
+        30.0 // Barge elevator position
+    );
   }
 
   /**
