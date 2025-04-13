@@ -4,7 +4,10 @@
 
 package frc.robot;
 
+import java.io.File;
+
 import com.pathplanner.lib.auto.NamedCommands;
+
 import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -21,14 +24,11 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.commands.AlignToReefTagRelative;
-import frc.robot.subsystems.SwerveSubsystem;
-import java.io.File;
-import swervelib.SwerveInputStream;
-import frc.robot.subsystems.PivotSubsystem;
 import frc.robot.subsystems.Elevator;
-import edu.wpi.first.wpilibj.XboxController;
-import edu.wpi.first.wpilibj2.command.button.POVButton;
+import frc.robot.subsystems.PivotSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
+import frc.robot.subsystems.SwerveSubsystem;
+import swervelib.SwerveInputStream;
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a "declarative" paradigm, very
@@ -54,34 +54,38 @@ public class RobotContainer
    * Converts driver input into a field-relative ChassisSpeeds that is controlled by angular velocity.
    */
   SwerveInputStream driveAngularVelocity = SwerveInputStream.of(drivebase.getSwerveDrive(),
-                                                                () -> driverXbox.getLeftY() ,
-                                                                () -> driverXbox.getLeftX() )
-                                                            .withControllerRotationAxis(() -> driverXbox.getRightX())
-                                                            .deadband(OperatorConstants.DEADBAND)
-                                                            .scaleTranslation(0.8)
-                                                            .allianceRelativeControl(true);
+  () -> -driverXbox.getLeftY(),  // Negated
+  () -> -driverXbox.getLeftX())  // Negated
+.withControllerRotationAxis(() -> -driverXbox.getRightX())  // Negated
+.deadband(OperatorConstants.DEADBAND)
+.scaleTranslation(0.8)
+.allianceRelativeControl(true);
 
   /**
    * Clone's the angular velocity input stream and converts it to a fieldRelative input stream.
    */
-  SwerveInputStream driveDirectAngle = driveAngularVelocity.copy().withControllerHeadingAxis(driverXbox::getRightX,
-                                                                                             driverXbox::getRightY)
-                                                           .headingWhile(true);
+  SwerveInputStream driveDirectAngle = driveAngularVelocity.copy().withControllerHeadingAxis(
+                                                                                         () -> -driverXbox.getRightX(),  // Negated
+                                                                                         () -> -driverXbox.getRightY())  // Negated
+                                                       .headingWhile(true);
+
+
 
   /**
    * Clone's the angular velocity input stream and converts it to a robotRelative input stream.
    */
-  SwerveInputStream driveRobotOriented = driveAngularVelocity.copy().robotRelative(true)
-                                                             .allianceRelativeControl(false);
+SwerveInputStream driveRobotOriented = driveAngularVelocity.copy().robotRelative(true)
+                                                         .allianceRelativeControl(false);
 
-  SwerveInputStream driveAngularVelocityKeyboard = SwerveInputStream.of(drivebase.getSwerveDrive(),
-                                                                        () -> -driverXbox.getLeftY(),
-                                                                        () -> -driverXbox.getLeftX())
-                                                                    .withControllerRotationAxis(() -> driverXbox.getRawAxis(
-                                                                        2))
-                                                                    .deadband(OperatorConstants.DEADBAND)
-                                                                    .scaleTranslation(0.8)
-                                                                    .allianceRelativeControl(true);
+
+                                                         SwerveInputStream driveAngularVelocityKeyboard = SwerveInputStream.of(drivebase.getSwerveDrive(),
+                                                         () -> driverXbox.getLeftY(),  // Already negated in your original code
+                                                         () -> driverXbox.getLeftX())  // Already negated in your original code
+                                                     .withControllerRotationAxis(() -> -driverXbox.getRawAxis(2))  // Negated
+                                                     .deadband(OperatorConstants.DEADBAND)
+                                                     .scaleTranslation(0.8)
+                                                     .allianceRelativeControl(true);
+
   // Derive the heading axis with math!
   SwerveInputStream driveDirectAngleKeyboard     = driveAngularVelocityKeyboard.copy()
                                                                                .withControllerHeadingAxis(() ->
