@@ -23,7 +23,8 @@ import edu.wpi.first.wpilibj2.command.WaitCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.commands.AlignToReefTagRelative;
+// import frc.robot.commands.AlignToReefTagRelativeL3;
+import frc.robot.commands.AlignToReefTagRelativeL4;
 import frc.robot.subsystems.Elevator;
 import frc.robot.subsystems.PivotSubsystem;
 import frc.robot.subsystems.ShooterSubsystem;
@@ -126,13 +127,15 @@ SwerveInputStream driveRobotOriented = driveAngularVelocity.copy().robotRelative
     // Set up pivot manual control with right joystick
     m_pivotSubsystem.setDefaultCommand(
         Commands.run(() -> {
-            double joystickValue = operatorXbox.getRightY();
+            double joystickValue = -operatorXbox.getRightY();
             m_pivotSubsystem.manualControl(joystickValue);
         }, m_pivotSubsystem)
     );
     // Reef alignment
-		driverXbox.povRight().onTrue(new AlignToReefTagRelative(true, drivebase).withTimeout(3));
-		driverXbox.povLeft().onTrue(new AlignToReefTagRelative(false, drivebase).withTimeout(3));
+		driverXbox.povRight().onTrue(new AlignToReefTagRelativeL4(true, drivebase).withTimeout(3));
+		driverXbox.povLeft().onTrue(new AlignToReefTagRelativeL4(false, drivebase).withTimeout(3));
+        // driverXbox.povUp().onTrue(new AlignToReefTagRelativeL3(true, drivebase).withTimeout(3));
+        // driverXbox.povDown().onTrue(new AlignToReefTagRelativeL3(false, drivebase).withTimeout(3));
 
     DriverStation.silenceJoystickConnectionWarning(true);
     NamedCommands.registerCommand("test", Commands.print("I EXIST"));
