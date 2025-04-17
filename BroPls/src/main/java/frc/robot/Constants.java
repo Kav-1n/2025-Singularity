@@ -151,9 +151,9 @@ public final class Constants
           public static final double ROT_TOLERANCE_REEF_ALIGNMENT = 0.1;  
           
           // L4 Setpoints
-          public static final double X_SETPOINT_L4_REEF_ALIGNMENT = -0.16;  // Vertical pose
-          public static final double Y_SETPOINT_LEFT_L4_REEF_ALIGNMENT = -.09;  //Horizontal pose
-          public static final double Y_SETPOINT_RIGHT_L4_REEF_ALIGNMENT = 0.18; //Horizontal Pose
+          public static final double X_SETPOINT_L4_REEF_ALIGNMENT = -0.16;  // Vertical pose Forword Backward
+          public static final double Y_SETPOINT_LEFT_L4_REEF_ALIGNMENT = -.09;  //Horizontal pose Left Right
+          public static final double Y_SETPOINT_RIGHT_L4_REEF_ALIGNMENT = 0.18; //Horizontal Pose Left Right
           public static final double ROT_SETPOINT_REEF_ALIGNMENT = 3.39;  // Rotation
 
           // L3 Setpoints
